@@ -75,3 +75,9 @@ Both scripts use only a small number of standard packages. You can install them 
 
 ```bash
 pip install requests
+
+🚀 1. Quick Start
+🔧 Requirements
+Python ≥ 3.8
+
+Packages: requests, csv (built-in), time, os
