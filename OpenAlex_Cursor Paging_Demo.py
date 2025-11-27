@@ -1,4 +1,4 @@
-import os, csv, time, requests
+import os, csv, time, requests 
 
 # ---------------- Config ----------------
 OUT_DIR = r"D:\OpenAlex\Data"
@@ -287,5 +287,6 @@ for YEAR in YEARS:
                 break
 
             time.sleep(SLEEP_SEC)
+
 
 print("\n🎉 All years processed.")
