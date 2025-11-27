@@ -32,8 +32,8 @@ The examples here serve demonstration purposes.
 openalex-api-tutorial/
 │
 ├── basic_paging_demo.py      # Simple pagination example (≤10k)
-├── cursor_paging_demo.py     # Multi-year full harvesting with cursor pagination
-└── README.md                  # Documentation (this file)
+├── cursor_paging_demo.py     # Full harvesting with cursor pagination. Please Install local IDEs (Cursor/VS Code/Pycharm,etc) to run the script.
+└── README.md                 # Documentation (this file)
 ```
 
 ---
