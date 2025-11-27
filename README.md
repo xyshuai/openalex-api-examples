@@ -82,7 +82,7 @@ type:types/article|types/review
 | Condition | Explanation |
 |-----------|-------------|
 | `open_access.is_oa:true` | Only Open Access papers |
-| `authorships.countries:countries/cn` | At least one author affiliated with a Malaysian institution |
+| `authorships.countries:countries/my` | At least one author affiliated with a Malaysian institution |
 | `publication_year:2023-2024` | Limit to 2 years |
 | `type:article OR review` | Research Article and Review Paper only |
 
@@ -275,9 +275,9 @@ Thanks to the OpenAlex team for providing a fully open scholarly index.
 
 ## 🎓 12. About This Repository
 
-This repository was created for demo purposes.  
-Researchers may freely reuse and adapt the scripts.  
-However, please note that these are **not official OpenAlex scripts**.
+ - This repository was created for demo purposes.
+ - Researchers may freely reuse and adapt the scripts.
+ - However, please note that these are not official OpenAlex scripts.
 
 ---
 
