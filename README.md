@@ -259,6 +259,7 @@ Priem, J., Piwowar, H., & Orr, R. (2022). OpenAlex: A fully-open index of schola
 | **Bibliometric Analysis** | Bibliometrix (R) |
 | **Data cleaning** | pandas |
 | **Visualization** | Plotly, SCImago Graphica |
+| **Citation Analysis** | CiteInsight |
 
 ---
 
