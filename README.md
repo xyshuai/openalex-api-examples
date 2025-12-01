@@ -175,10 +175,11 @@ The CSV includes:
 | **Citation metrics** | cited_by_count, fwci, citation_percentile, top1pct, top10pct |
 | **OA info** | is_oa, oa_status, oa_url, license, version |
 | **Venue** | journal, issn_l |
-| **Authors** | first_author, authors, authors_affiliations |
-| **Author-level features** | corresponding_authors, institution_country_codes |
+| **Authors** | first_author, first_author_country_codes, authors, authors_affiliations |
+| **Author-level features** | corresponding_authors, corresponding_author_country_codes |
 | **Topic modeling** | primary_topic_*, topics_top5 |
 | **APC** | apc_list_values |
+| **SDG** | sdg_labels |
 
 ---
 
