@@ -1,4 +1,4 @@
-import os, csv, time, requests 
+import os, csv, time, requests
 
 # ---------------- Config ----------------
 OUT_DIR = r"D:\OpenAlex\Data"
@@ -9,14 +9,14 @@ BASE_URL = "https://api.openalex.org/works"
 MAILTO = "your email address"
 
 # Years to harvest (This is an demo example, you may change the range based on your needs)
-YEARS = list(range(2023, 2024))   # Example: 2023–2024
-PER_PAGE = 200                    # Cursor pagination max = 200
-MAX_PAGES = None                  # None → full harvest; set to small int (e.g., 5) for testing
-SLEEP_SEC = 1.0                   # Delay between pages; increase if rate-limited
+YEARS = list(range(2023, 2024))  # Example: 2023–2024
+PER_PAGE = 200  # Cursor pagination max = 200
+MAX_PAGES = 5  # None → full harvest; set to small int (e.g., 5) for testing
+SLEEP_SEC = 1.0  # Delay between pages; increase if rate-limited
 
 # Base filter
-# For “authors with country MY”, use authorships.countries
-# For “affiliated institutions in MY”, replace with institutions.country_code:my
+# For "authors with country MY", use authorships.countries
+# For "affiliated institutions in MY", replace with institutions.country_code:my
 BASE_FILTER = "open_access.is_oa:true,authorships.countries:countries/my,type:types/article|types/review"
 SORT = "cited_by_count:desc"
 
@@ -35,7 +35,7 @@ SELECT_FIELDS = [
     "authorships", "institutions",
     "concepts", "primary_topic", "topics",
     "fwci", "citation_normalized_percentile",
-    "apc_list"
+    "apc_list", "sustainable_development_goals"
 ]
 SELECT_PARAM = ",".join(SELECT_FIELDS)
 
@@ -45,13 +45,15 @@ CSV_HEADERS = [
     "cited_by_count", "journal", "issn_l",
     "is_oa", "oa_status", "oa_url", "license", "version",
     "first_author", "authors", "authors_affiliations",
-    "corresponding_authors", "institution_country_codes",
+    "corresponding_authors", "corresponding_author_country_codes",
     "primary_topic_id", "primary_topic_name",
     "primary_topic_domain", "primary_topic_field", "primary_topic_subfield",
     "topics_top5",
     "apc_list_values",
     "fwci", "citation_percentile", "citation_top_1pct", "citation_top_10pct",
+    "sdg_labels",
 ]
+
 
 # ---------------- Helper Functions ----------------
 def flatten_authors(authorships):
@@ -61,6 +63,7 @@ def flatten_authors(authorships):
         nm = (a.get("author") or {}).get("display_name")
         if nm: names.append(nm)
     return "; ".join(names)
+
 
 def flatten_authors_affils(authorships):
     """
@@ -79,6 +82,7 @@ def flatten_authors_affils(authorships):
             parts.append(nm if not affs else f"{nm} ({';'.join(affs)})")
     return "; ".join(parts)
 
+
 def corresponding_authors_list(authorships):
     """Extract corresponding authors."""
     if not authorships: return ""
@@ -89,13 +93,29 @@ def corresponding_authors_list(authorships):
             if nm: names.append(nm)
     return "; ".join(names)
 
-def institution_country_codes(work):
-    """Collect country_code from top-level institutions[]."""
+
+def corresponding_author_country_codes(authorships):
+    """
+    Collect country codes for corresponding author(s):
+    - For each authorship with is_corresponding=True:
+      * authorships[i].countries[]
+      * authorships[i].institutions[].country_code
+    """
+    if not authorships:
+        return ""
     s = set()
-    for inst in (work.get("institutions") or []):
-        cc = inst.get("country_code")
-        if cc: s.add(cc)
+    for a in authorships:
+        if not a.get("is_corresponding"):
+            continue
+        for c in (a.get("countries") or []):
+            if c:
+                s.add(c)
+        for inst in (a.get("institutions") or []):
+            cc = inst.get("country_code")
+            if cc:
+                s.add(cc)
     return ";".join(sorted(s)) if s else ""
+
 
 def pick_venue_from_primary_or_sources(w):
     """Extract journal / ISSN-L from primary_location or sources[] as fallback."""
@@ -120,6 +140,7 @@ def pick_venue_from_primary_or_sources(w):
                     break
     return journal, issn_l
 
+
 def topics_top5_str(w):
     """Return top 5 non-primary topics sorted by score."""
     primary = w.get("primary_topic") or {}
@@ -136,6 +157,7 @@ def topics_top5_str(w):
             out.append(f"{name} (score={sc:.2f})" if isinstance(sc, (int, float)) else name)
     return "; ".join(out)
 
+
 def percentile_fields(w):
     """Handle citation_normalized_percentile fields."""
     cnp = w.get("citation_normalized_percentile") or {}
@@ -149,13 +171,16 @@ def percentile_fields(w):
         "Yes" if top10 else ("No" if top10 is not None else "")
     )
 
+
 def apc_list_values_str(work):
     """Normalize apc_list into readable string."""
     apc = work.get("apc_list", None)
     items = []
+
     def norm_one(x):
         if isinstance(x, dict):
-            val = x.get("value", None); cur = x.get("currency", "")
+            val = x.get("value", None);
+            cur = x.get("currency", "")
             if val is not None and cur: return f"{val} {cur}"
             if val is not None: return str(val)
             if cur: return cur
@@ -163,14 +188,90 @@ def apc_list_values_str(work):
         if isinstance(x, (int, float)): return str(x)
         if isinstance(x, str): return x.strip()
         return ""
+
     if isinstance(apc, list):
         for it in apc:
-            s = norm_one(it);  s and items.append(s)
+            s = norm_one(it);
+            s and items.append(s)
     elif isinstance(apc, dict):
-        s = norm_one(apc);   s and items.append(s)
+        s = norm_one(apc);
+        s and items.append(s)
     elif apc is not None:
-        s = norm_one(apc);   s and items.append(s)
+        s = norm_one(apc);
+        s and items.append(s)
     return "; ".join(items)
+
+
+def parse_sdg_labels(work):
+    """
+    Extract SDG information from 'sustainable_development_goals'.
+    Returns a string like: 'SDG 3: Good health and well-being (0.95); SDG 4: Quality education (0.87)'
+    """
+    sdg_field = work.get("sustainable_development_goals")
+
+    if not sdg_field:
+        return ""
+
+    labels = []
+
+    # OpenAlex returns a list with id, display_name, score
+    if isinstance(sdg_field, list):
+        for item in sdg_field:
+            if isinstance(item, dict):
+                # Extract SDG number from id URL (e.g., "https://metadata.un.org/sdg/3" -> "3")
+                sdg_id = item.get("id", "")
+                sdg_number = ""
+                if sdg_id:
+                    try:
+                        sdg_number = sdg_id.rstrip('/').split('/')[-1]
+                    except:
+                        pass
+
+                name = item.get("display_name", "")
+                score = item.get("score")
+
+                if name:
+                    # Combine into full format: SDG 3: Good health and well-being (0.95)
+                    if sdg_number:
+                        full_label = f"SDG {sdg_number}: {name}"
+                    else:
+                        full_label = name
+
+                    if score is not None:
+                        labels.append(f"{full_label} ({score:.2f})")
+                    else:
+                        labels.append(full_label)
+        if labels:
+            return "; ".join(labels)
+
+    # If not list format, try other handling
+    elif isinstance(sdg_field, dict):
+        sdg_id = sdg_field.get("id", "")
+        sdg_number = ""
+        if sdg_id:
+            try:
+                sdg_number = sdg_id.rstrip('/').split('/')[-1]
+            except:
+                pass
+
+        name = sdg_field.get("display_name", "")
+        score = sdg_field.get("score")
+
+        if name:
+            if sdg_number:
+                full_label = f"SDG {sdg_number}: {name}"
+            else:
+                full_label = name
+
+            if score is not None:
+                return f"{full_label} ({score:.2f})"
+            return full_label
+
+    elif isinstance(sdg_field, str):
+        return sdg_field.strip()
+
+    return ""
+
 
 # ---------------- Run (multi-year full harvest) ----------------
 for YEAR in YEARS:
@@ -246,7 +347,7 @@ for YEAR in YEARS:
                 authors = flatten_authors(authorships)
                 authors_affils = flatten_authors_affils(authorships)
                 corr_authors = corresponding_authors_list(authorships)
-                inst_cc = institution_country_codes(w)
+                corr_author_cc = corresponding_author_country_codes(authorships)
 
                 primary = w.get("primary_topic") or {}
                 primary_topic_id = primary.get("id", "")
@@ -259,18 +360,20 @@ for YEAR in YEARS:
                 apc_values = apc_list_values_str(w)
                 fwci = w.get("fwci", "")
                 citation_percentile, top1, top10 = percentile_fields(w)
+                sdg_labels = parse_sdg_labels(w)
 
                 writer.writerow([
                     w.get("id", ""), doi, title, year, wtype, lang,
                     cited, journal, issn_l,
                     is_oa, oa_status, oa_url, license_, version,
                     first_author, authors, authors_affils,
-                    corr_authors, inst_cc,
+                    corr_authors, corr_author_cc,
                     primary_topic_id, primary_topic_name,
                     primary_topic_domain, primary_topic_field, primary_topic_subfield,
                     top5,
                     apc_values,
-                    fwci, citation_percentile, top1, top10
+                    fwci, citation_percentile, top1, top10,
+                    sdg_labels
                 ])
                 total += 1
 
@@ -287,6 +390,5 @@ for YEAR in YEARS:
                 break
 
             time.sleep(SLEEP_SEC)
-
 
 print("\n🎉 All years processed.")
